@@ -1,14 +1,7 @@
+#include <iostream>
 #include <thread>
-#include <functional>
 
 #include <boost/asio.hpp>
-#include <boost/bind.hpp>
-
-#include <aio.h>
-#include <signal.h>
-#include <sys/signalfd.h>
-
-#include <iostream>
 
 #include "PosixFileLib/PosixAsyncFile.h"
 
@@ -19,12 +12,12 @@ static const size_t BUFSIZE = 8192;//65535;
 
 static void ReadFinishedCb(const boost::system::error_code& ec, size_t bytes_transferred, char* buf, size_t offset, PosixAsyncFile::FileHandle* fileHandle, const char* filename)
 {
-    std::cout << "ReadFinishedCb called on " << filename << "with " << bytes_transferred << " bytes. Current offset=" << offset << std::endl;
+    std::cout << "ReadFinishedCb called on " << filename << " with " << bytes_transferred << " bytes. Current offset=" << offset << std::endl;
     if(bytes_transferred == BUFSIZE)
     {
         //There is more data
         offset += bytes_transferred;
-        
+
         fileHandle->AsyncRead(offset, buf, BUFSIZE, std::bind(&ReadFinishedCb, std::placeholders::_1, std::placeholders::_2, buf, offset, fileHandle, filename));
     }
     else
@@ -48,11 +41,10 @@ int main(int argc, char **argv)
       std::cout << "Usage " << argv[0] << " [pathToFile]... " << std::endl;
       return 1;
     }
-    
+
     std::vector<std::unique_ptr<PosixAsyncFile::FileHandle>> posixAsyncFileHandles;
     for(int i = 1; i < argc; ++i)
     {
-        
         const char* filename = argv[i];
         int filedes = open(filename, O_RDONLY);
         if(filedes < 0)
@@ -60,7 +52,7 @@ int main(int argc, char **argv)
             std::cout << "Open " << filename << " failed with error " << errno << std::endl;
             return 2;
         }
-        
+
         posixAsyncFileHandles.emplace_back(new PosixAsyncFile::FileHandle(g_ioService, filedes));
         PosixAsyncFile::FileHandle* fileHandle = posixAsyncFileHandles.back().get();
         char* buf = new char[BUFSIZE];
@@ -79,17 +71,17 @@ int main(int argc, char **argv)
         fileHandleWrite->AsyncWrite(0, writeBuf, BUFSIZE, std::bind(&WriteFinishedCb, std::placeholders::_1, std::placeholders::_2, writeBuf, write_fd, 0));
         */
     }
-    
+
     std::vector<std::thread> threadgroup;
     for(int i = 0; i < NO_OF_THREADS; i++)
     {
-       threadgroup.emplace_back(boost::bind(&boost::asio::io_service::run, &g_ioService));
+       threadgroup.emplace_back([](){g_ioService.run();});
     }
-    
+
     for(std::thread& t : threadgroup)
     {
         t.join();
     }
-    
+
     return 0;
 }
