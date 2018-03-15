@@ -12,8 +12,10 @@ target_include_directories(PosixFileLib
 )
 
 target_link_libraries(PosixFileLib
+    PUBLIC
+        Boost::boost
     PRIVATE
-        boost_system
-        rt
+        ${LIBRT_LIBRARIES}
+        Boost::system
         Threads::Threads
 )
