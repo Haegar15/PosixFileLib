@@ -43,10 +43,11 @@ static int32_t InstallSignalFd(uint32_t signalNo)
 struct IoOperation
 {
     aiocb m_aioCb = {0};
+    boost::asio::io_service& m_io_service;
     PosixAsyncFile::FileHandle::TOperationFinishedCb m_callback;
 
     IoOperation(int32_t fd, char* buf, size_t bufSize, size_t offset, 
-                const PosixAsyncFile::FileHandle::TOperationFinishedCb& callback) : m_callback(callback)
+                const PosixAsyncFile::FileHandle::TOperationFinishedCb& callback, boost::asio::io_service& io_service) : m_callback(callback), m_io_service(io_service)
     {
         m_aioCb.aio_buf = buf;
         m_aioCb.aio_fildes = fd;
@@ -64,7 +65,7 @@ struct IoOperation
 namespace PosixAsyncFile
 {
 
-FileHandle::FileHandle(boost::asio::io_service& io_service, uint32_t fd) : m_fd(fd)
+FileHandle::FileHandle(boost::asio::io_service& io_service, uint32_t fd) : m_fd(fd), m_io_service(io_service)
 {
     //Initialize global stream_descriptor for reading signals
     std::call_once(stream_descriptor_intialization_flag, [&io_service]()
@@ -75,7 +76,7 @@ FileHandle::FileHandle(boost::asio::io_service& io_service, uint32_t fd) : m_fd(
 
 void FileHandle::AsyncWrite(size_t offset, const char* buf, size_t bufSize, const TOperationFinishedCb& writeFinishedCb)
 {
-    IoOperation* ioOp = new IoOperation(m_fd, const_cast<char*>(buf), bufSize, offset, writeFinishedCb);
+    IoOperation* ioOp = new IoOperation(m_fd, const_cast<char*>(buf), bufSize, offset, writeFinishedCb, m_io_service);
 
     int retval = aio_write(&ioOp->m_aioCb);
     assert(retval == 0);
@@ -92,7 +93,7 @@ void FileHandle::AsyncWrite(size_t offset, const char* buf, size_t bufSize, cons
 
 void FileHandle::AsyncRead(size_t offset, char* buf, size_t bufSize, const TOperationFinishedCb& readFinishedCb)
 {
-    IoOperation* ioOp = new IoOperation(m_fd, buf, bufSize, offset, readFinishedCb);
+    IoOperation* ioOp = new IoOperation(m_fd, buf, bufSize, offset, readFinishedCb, m_io_service);
 
     int retval = aio_read(&ioOp->m_aioCb);
     assert(retval == 0);
@@ -131,8 +132,7 @@ void FileHandle::AsyncRead(size_t offset, char* buf, size_t bufSize, const TOper
 #ifndef NDEBUG
                 std::cout << "Transferred " << retVal << " Bytes from fd=" << aioStruct->aio_fildes << ". I/O-Operation finished." << std::endl;
 #endif
-                //io_service.post(std::bind(ioOp->m_callback, retVal == 0 ? boost::asio::error::eof : boost::system::error_code(), retVal));
-                ioOp->m_callback(retVal == 0 ? boost::asio::error::eof : boost::system::error_code(), retVal);
+                ioOp->m_io_service.post(std::bind(ioOp->m_callback, retVal == 0 ? boost::asio::error::eof : boost::system::error_code(), retVal));
             }
             else
             {
@@ -140,8 +140,7 @@ void FileHandle::AsyncRead(size_t offset, char* buf, size_t bufSize, const TOper
 #ifndef NDEBUG
                 std::cout << "Error: " << retVal << " errno: " << error << std::endl;
 #endif
-                //io_service.post(std::bind(ioOp->m_callback, boost::system::error_code(error, boost::system::system_category()), 0));
-                ioOp->m_callback(boost::system::error_code(error, boost::system::system_category()), 0);
+                ioOp->m_io_service.post(std::bind(ioOp->m_callback, boost::system::error_code(error, boost::system::system_category()), 0));
             }
             ++finishedOperations;
             //IO_Operation is finished and can be deleted

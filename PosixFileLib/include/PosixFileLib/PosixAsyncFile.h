@@ -21,6 +21,7 @@ private:
     static void SignalHandler(const boost::system::error_code& ec, size_t bytesTransferred);
 
     uint32_t m_fd;
+    boost::asio::io_service& m_io_service;
 };
 
 }
