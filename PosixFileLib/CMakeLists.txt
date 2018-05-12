@@ -15,7 +15,7 @@ target_link_libraries(PosixFileLib
     PUBLIC
         Boost::boost
     PRIVATE
-        ${LIBRT_LIBRARIES}
+        ${LIBRT_LIBRARY}
         Boost::system
         Threads::Threads
 )
